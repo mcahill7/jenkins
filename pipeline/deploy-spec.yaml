@@ -1,12 +1,5 @@
 version: 0.2
 
-env:
-  variables:
-    CFN_TEMPLATES: |
-      ecr
-     # cluster
-      service
-
 phases:
   install:
     runtime-versions:

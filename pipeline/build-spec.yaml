@@ -4,7 +4,6 @@ env:
   variables:
     CFN_TEMPLATES: |
       ecr
-     # cluster
       service
 
 phases:
