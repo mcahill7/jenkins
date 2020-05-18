@@ -22,7 +22,7 @@ phases:
       - |
         for cfn_template in $CFN_TEMPLATES; do
           echo "Scanning CloudFormation template $cfn_template"
-          cfn_nag_scan --input-path infrastructure/$cfn_template.yaml
+          cfn_nag infrastructure/$cfn_template.yaml --blacklist-path blacklist
         done
 
   build:

@@ -1,0 +1,4 @@
+---
+RulesToSuppress:
+- id: F1000
+  reason: Ignore, no functional difference
