@@ -1,0 +1,36 @@
+version: 0.2
+
+env:
+  variables:
+    CFN_TEMPLATES: |
+      ecr
+      jenkins
+
+phases:
+  install:
+    runtime-versions:
+      ruby: 2.6
+    commands:
+      - echo 'Build' action Install phase - install testing dependencies
+      - gem install bundler
+      - bundle install
+
+  pre_build:
+    commands:
+      - echo Linting started on `date`
+      - |
+        for cfn_template in $CFN_TEMPLATES; do
+          echo "Scanning CloudFormation template $cfn_template"
+          cfn_nag_scan --input-path infrastructure/$cfn_template.yaml
+        done
+
+  build:
+    commands:
+      - rake docker:build
+      - rake docker:tag
+      - rake docker:push
+
+artifacts:
+  files:
+    - '**/*'
+type: zip

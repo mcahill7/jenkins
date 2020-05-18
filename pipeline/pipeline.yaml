@@ -1,0 +1,365 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create a CI/CD Pipeline for building and deploying Jenkins
+Parameters:
+  RepositoryName:
+    Type: String
+    Default: config-testing
+  RepositoryOwner:
+    Type: String
+    Default: mcahill7
+  BranchName:
+    Type: String
+    Default: sg
+  GitHubToken:
+    Type: String
+    Default: 
+  BuildAgentImage:
+    Type: String
+    Default: aws/codebuild/standard:2.0
+  BuildCheckTimeoutInMinutes:
+    Type: Number
+    Default: 5
+  BuildCompileTimeoutInMinutes:
+    Type: Number
+    Default: 5
+  BuildTimeoutInMinutes:
+    Type: Number
+    Default: 15
+  UnitTestTimeoutInMinutes:
+    Type: Number
+    Default: 15
+  DeliverDeployTimeoutInMinutes:
+    Type: Number
+    Default: 10
+  IntegrationTestTimeoutInMinutes:
+    Type: Number
+    Default: 15
+Outputs:
+  CodePipelineUrl:
+    Value: !Sub 'https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${Pipeline}'
+    Description: CodePipeline URL
+Resources:
+  # Pipeline-related resources
+  PipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${RepositoryName}-codepipeline-role'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: codepipeline-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                Resource:
+                  - !Sub 'arn:aws:codebuild:${AWS::Region}:${AWS::AccountId}:project/*'
+        - PolicyName: s3-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketVersioning
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::${PipelineArtifactStore}'
+                  - !Sub 'arn:aws:s3:::${PipelineArtifactStore}/*'
+  PipelineArtifactStore:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${RepositoryName}-${AWS::Region}-${AWS::AccountId}-artifact'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+  PipelineArtifactStoreBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PipelineArtifactStore
+      PolicyDocument:
+        Version: '2012-10-17'
+        Id: SseAndSslPolicy
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${PipelineArtifactStore}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Ref RepositoryName
+      RoleArn: !GetAtt PipelineServiceRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref PipelineArtifactStore
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Version: '1'
+                Provider: GitHub
+              Configuration:
+                Owner: !Ref RepositoryOwner
+                Repo: !Ref RepositoryName
+                Branch: !Ref BranchName
+                OAuthToken: !Ref GitHubToken
+              OutputArtifacts:
+                - Name: SourcedArtifacts
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: Build
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                ProjectName: !Ref ActionBuild
+              InputArtifacts:
+                - Name: SourcedArtifacts
+              OutputArtifacts:
+                - Name: BuiltArtifacts
+              RunOrder: 1
+        - Name: Deliver
+          Actions:
+            - Name: Deploy
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                ProjectName: !Ref ActionCreateRules
+              InputArtifacts:
+                - Name: BuiltArtifacts
+              OutputArtifacts:
+                - Name: DeployedArtifacts
+              RunOrder: 1
+  # Trigger resources
+  PipelineTriggerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - events.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: !Sub '${RepositoryName}-trigger-pipeline-execution'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codepipeline:StartPipelineExecution
+                Resource:
+                  - !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}'
+  # Action-related resources
+  ActionServiceRole:
+    Type: AWS::IAM::Role
+    DependsOn:
+      - PipelineArtifactStore
+    Properties:
+      RoleName: !Sub '${RepositoryName}-codebuild-role'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSCodeDeployRoleForLambda'
+      Path: /
+      Policies:
+        - PolicyName: codebuild-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                Resource:
+                  - !Sub 'arn:aws:codebuild:${AWS::Region}:${AWS::AccountId}:project/*'
+        - PolicyName: artifact-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketVersioning
+                Resource:
+                  - !Sub 'arn:aws:s3:::${RepositoryName}-${AWS::Region}-${AWS::AccountId}-artifact'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::${RepositoryName}-${AWS::Region}-${AWS::AccountId}-artifact/*'
+        - PolicyName: logging-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*'
+        - PolicyName: deployment-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: awsiam
+                Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:PassRole
+                  - iam:DeleteRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:GetRolePolicy
+                Resource:
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/*'
+              - Sid: awscloudformation
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:SetStackPolicy
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:ListChangeSets
+                  - cloudformation:DescribeChangeSet
+                Resource:
+                  - !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/*'
+                  - !Sub 'arn:aws:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31'
+              - Sid: awscloudwatch
+                Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:DeleteAlarms
+                Resource:
+                  - !Sub 'arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:*'
+              - Sid: globalresources
+                Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - cloudformation:ValidateTemplate
+                  - cloudformation:GetTemplateSummary
+                  - cloudwatch:DescribeAlarms
+                  - iam:CreatePolicy
+                  - iam:CreatePolicyVersion
+                  - config:PutConfigRule
+                  - config:DeleteConfigRule
+                  - config:DescribeConfigRules
+                  - config:DescribeConfigurationRecorders
+                  - config:DescribeConfigurationRecorderStatus
+                  - config:StartConfigurationRecorder
+                  - config:StopConfigurationRecorder
+                  - config:PutConfigurationRecorder
+                  - config:DeleteConfigurationRecorder
+                  - config:DeleteDeliveryChannel
+                  - config:PutDeliveryChannel
+                  - s3:CreateBucket
+                  - s3:DeleteBucket
+                  - s3:ListBucket
+                  - s3:DeleteObject*
+                  - s3:GetBucketPolicy
+                  - s3:ListObjects
+                  - s3:PutBucketPolicy
+                  - s3:DeleteBucketPolicy
+                  - s3:SetBucketEncryption
+                  - s3:PutBucketAcl
+                  - s3:GetEncryptionConfiguration
+                  - s3:PutEncryptionConfiguration
+                  - s3:PutObject
+                  - s3:GetObject
+                  - lambda:*
+                  - config:Put*
+                  - iam:*
+                  - ec2:*
+                  - elasticloadbalancing:*
+                  - autoscaling:*
+                Resource:
+                  - '*'
+  ActionBuild:
+    Type: AWS::CodeBuild::Project
+    DependsOn:
+      - PipelineArtifactStore
+    Properties:
+      Artifacts:
+        Packaging: ZIP
+        Type: CODEPIPELINE
+      Description: 'CodeBuild Project'
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: !Ref BuildAgentImage
+        Type: LINUX_CONTAINER
+      Name: !Sub '${RepositoryName}-build'
+      ServiceRole: !Ref ActionServiceRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: ./pipeline/build-spec.yaml
+      TimeoutInMinutes: !Ref BuildTimeoutInMinutes
+  ActionCreateRules:
+    Type: AWS::CodeBuild::Project
+    DependsOn:
+      - PipelineArtifactStore
+    Properties:
+      Artifacts:
+        Packaging: ZIP
+        Type: CODEPIPELINE
+      Description: 'CodeBuild Project'
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: !Ref BuildAgentImage
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: BUCKET_NAME
+            Value: !Ref PipelineArtifactStore
+          - Name: REPO_NAME
+            Value: !Ref RepositoryName
+      Name: !Sub '${RepositoryName}-create'
+      ServiceRole: !Ref ActionServiceRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: ./pipeline/deploy-spec.yaml
+      TimeoutInMinutes: !Ref BuildTimeoutInMinutes

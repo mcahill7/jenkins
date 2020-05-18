@@ -1,0 +1,28 @@
+version: 0.2
+
+env:
+  variables:
+    CFN_TEMPLATES: |
+      ecr
+      jenkins
+
+phases:
+  install:
+    runtime-versions:
+      ruby: 2.6
+
+  build:
+    commands:
+      - echo Build started on `date`
+      - rake deploy:ecr
+      - rake deploy:jenkins
+  
+  post_build:
+    commands:
+      - echo Running Aws Tests
+      - rake infra:test
+
+artifacts:
+  files:
+    - '**/*'
+type: zip
