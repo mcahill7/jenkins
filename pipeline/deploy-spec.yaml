@@ -4,7 +4,8 @@ env:
   variables:
     CFN_TEMPLATES: |
       ecr
-      jenkins
+      cluster
+      service
 
 phases:
   install:
@@ -15,7 +16,8 @@ phases:
     commands:
       - echo Build started on `date`
       - rake deploy:ecr
-      - rake deploy:jenkins
+      - rake deploy:cluster
+      - rake deploy:service
   
   post_build:
     commands:

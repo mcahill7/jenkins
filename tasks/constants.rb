@@ -4,7 +4,8 @@
 @ecr_name = 'jenkins-ecr'
 @ecr_repo_url_path = 'jenkins-ecr-repo'
 @version_url_path = 'version'
-@cluster_name = 'jenkins'
+@cluster_name = 'jenkins-cluster'
+@service_name = 'jenkins-service'
 @container = Docker::Container.create(
   'Image' => 'demo:latest',
   'ExposedPorts' => { '8080/tcp' => {} },

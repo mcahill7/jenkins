@@ -4,7 +4,8 @@ env:
   variables:
     CFN_TEMPLATES: |
       ecr
-      jenkins
+      cluster
+      service
 
 phases:
   install:

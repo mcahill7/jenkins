@@ -23,40 +23,54 @@ task 'jenkins:e2e' do
   end
 end
 
-desc 'Deploy Jenkins'
-task 'deploy:jenkins' do
+desc 'Deploy Jenkins Service'
+task 'deploy:service' do
   cloudformation_client = Aws::CloudFormation::Client.new
   begin
     cloudformation_client.describe_stacks({
-                                            stack_name: @cluster_name
+                                            stack_name: @service_name
                                           })
-    Rake::Task['update:jenkins'].invoke
+    Rake::Task['update:service'].invoke
   rescue StandardError => e
-    Rake::Task['create:jenkins'].invoke
+    Rake::Task['create:service'].invoke
+  else
+  end
+end
+
+desc 'Deploy Jenkins Service'
+task 'deploy:cluster' do
+  cloudformation_client = Aws::CloudFormation::Client.new
+  begin
+    cloudformation_client.describe_stacks({
+                                            stack_name: @service_name
+                                          })
+    Rake::Task['update:cluster'].invoke
+  rescue StandardError => e
+    Rake::Task['create:service'].invoke
   else
   end
 end
 
 desc 'Create Jenkins ECS'
-task 'create:jenkins' do
+task 'create:service' do
   version = File.read(@version_url_path).to_s
   cloudformation_client = Aws::CloudFormation::Client.new
 
   cloudformation_client.create_stack(
-    stack_name: @cluster_name,
-    template_body: File.read('infrastructure/jenkins.yaml').to_s,
+    stack_name: @service_name,
+    template_body: File.read('infrastructure/service.yaml').to_s,
     parameters: [
       {
-        parameter_key: 'ImageUrl',
+        parameter_key: 'AppImage',
         parameter_value: "#{File.read(@ecr_repo_url_path)}/jenkins:#{version}"
       },
       {
-        parameter_key: 'StackName',
-        parameter_value: @cluster_name
+        parameter_key: 'AppPort',
+        parameter_value: '8080'
       },
       {
-        parameter_key: 'ContainerPort',
-        parameter_value: '8080'
+        parameter_key: 'AppCommand',
+        parameter_value: ''
       }
     ]
   )
@@ -67,28 +81,61 @@ task 'create:jenkins' do
   puts "Cloudformation Stack: #{@service_name} created."
 end
 
-desc 'Update Jenkins ECS'
-task 'update:jenkins' do
+desc 'Update Jenkins ECS' Service
+task 'update:service' do
   version = File.read(@version_url_path).to_s
   cloudformation_client = Aws::CloudFormation::Client.new
 
   cloudformation_client.update_stack(
     stack_name: @service_name,
-    template_body: File.read('infrastructure/jenkins.yaml').to_s,
+    template_body: File.read('infrastructure/service.yaml').to_s,
     parameters: [
       {
-        parameter_key: 'ImageUrl',
+        parameter_key: 'AppImage',
         parameter_value: "#{File.read(@ecr_repo_url_path)}/jenkins:#{version}"
       },
       {
-        parameter_key: 'StackName',
-        parameter_value: @cluster_name
+        parameter_key: 'AppPort',
+        parameter_value: '8080'
       },
       {
-        parameter_key: 'ContainerPort',
-        parameter_value: '8080'
+        parameter_key: 'AppCommand',
+        parameter_value: ''
       }
     ]
+  )
+
+  cloudformation_client.wait_until(:stack_update_complete,
+                                   stack_name: @service_name)
+
+  puts "Cloudformation Stack: #{@service_name} updated."
+end
+
+
+desc 'Create Jenkins Infra'
+task 'create:cluster' do
+  version = File.read(@version_url_path).to_s
+  cloudformation_client = Aws::CloudFormation::Client.new
+
+  cloudformation_client.create_stack(
+    stack_name: @service_name,
+    template_body: File.read('infrastructure/cluster.yaml').to_s
+  )
+
+  cloudformation_client.wait_until(:stack_create_complete,
+                                   stack_name: @service_name)
+
+  puts "Cloudformation Stack: #{@service_name} created."
+end
+
+desc 'Update Jenkins ECS' Service
+task 'update:service' do
+  version = File.read(@version_url_path).to_s
+  cloudformation_client = Aws::CloudFormation::Client.new
+
+  cloudformation_client.update_stack(
+    stack_name: @service_name,
+    template_body: File.read('infrastructure/service.yaml').to_s
   )
 
   cloudformation_client.wait_until(:stack_update_complete,
