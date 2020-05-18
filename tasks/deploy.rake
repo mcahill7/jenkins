@@ -128,7 +128,7 @@ task 'create:cluster' do
   puts "Cloudformation Stack: #{@service_name} created."
 end
 
-desc 'Update Jenkins ECS' Service
+desc 'Update Jenkins ECS Service'
 task 'update:service' do
   version = File.read(@version_url_path).to_s
   cloudformation_client = Aws::CloudFormation::Client.new
