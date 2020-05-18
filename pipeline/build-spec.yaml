@@ -13,7 +13,7 @@ phases:
       ruby: 2.6
     commands:
       - echo 'Build' action Install phase - install testing dependencies
-      - gem install bundler
+      - gem install bundler cfn-nag
       - bundle install
 
   pre_build:
@@ -22,7 +22,7 @@ phases:
       - |
         for cfn_template in $CFN_TEMPLATES; do
           echo "Scanning CloudFormation template $cfn_template"
-          cfn_nag infrastructure/$cfn_template.yaml --blacklist-path blacklist
+          cfn_nag_scan --input-path infrastructure/$cfn_template.yaml --blacklist-path blacklist
         done
 
   build:
