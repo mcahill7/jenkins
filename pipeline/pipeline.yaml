@@ -12,7 +12,7 @@ Parameters:
     Default: master
   GitHubToken:
     Type: String
-    Default:  a5601d1999647d71d2c13dfddc4960826b8f955c
+    Default:  a58322700b44d53f7147970f32fd9f5a30b673e0
   BuildAgentImage:
     Type: String
     Default: aws/codebuild/standard:2.0

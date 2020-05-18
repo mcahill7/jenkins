@@ -12,7 +12,7 @@ phases:
       ruby: 2.6
     commands:
       - echo 'Build' action Install phase - install testing dependencies
-      - gem install bundler cfn-nag docker-api rake rspec aws-sdk serverspec
+      - gem install bundler cfn-nag docker-api rake
       - bundle install
 
 #  pre_build:
