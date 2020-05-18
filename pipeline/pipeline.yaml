@@ -3,13 +3,13 @@ Description: Create a CI/CD Pipeline for building and deploying Jenkins
 Parameters:
   RepositoryName:
     Type: String
-    Default: config-testing
+    Default: jenkins
   RepositoryOwner:
     Type: String
     Default: mcahill7
   BranchName:
     Type: String
-    Default: sg
+    Default: master
   GitHubToken:
     Type: String
     Default: 
