@@ -41,7 +41,7 @@ desc 'Deploy Jenkins Service'
 task 'deploy:cluster' do
   cloudformation_client = Aws::CloudFormation::Client.new
   begin
-    cloudformation_client.describe_ stacks({
+    cloudformation_client.describe_stacks({
                                             stack_name: @service_name
                                           })
     Rake::Task['update:cluster'].invoke
