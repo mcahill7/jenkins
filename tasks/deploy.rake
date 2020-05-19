@@ -23,6 +23,16 @@ task 'jenkins:e2e' do
   end
 end
 
+desc 'Deploy'
+task 'deploy:all' do
+  cloudformation_client = Aws::CloudFormation::Client.new
+  begin
+
+  rescue
+  else
+  end
+end
+
 desc 'Deploy Jenkins Service'
 task 'deploy:service' do
   cloudformation_client = Aws::CloudFormation::Client.new
@@ -66,8 +76,8 @@ task 'create:service' do
         parameter_value: "#{File.read(@ecr_repo_url_path)}/jenkins:#{version}"
       },
       {
-        parameter_key: 'StackName',
-        parameter_value: @service_name
+        parameter_key: 'ParentStackName',
+        parameter_value: @cluster_name
       },
       {
         parameter_key: 'ServiceName',
@@ -97,8 +107,8 @@ task 'update:service' do
         parameter_value: "#{File.read(@ecr_repo_url_path)}/jenkins:#{version}"
       },
       {
-        parameter_key: 'StackName',
-        parameter_value: @service_name
+        parameter_key: 'ParentStackName',
+        parameter_value: @cluster_name
       },
       {
         parameter_key: 'ServiceName',
