@@ -59,6 +59,7 @@ task 'create:service' do
   cloudformation_client.create_stack(
     stack_name: @service_name,
     template_body: File.read('infrastructure/service.yaml').to_s,
+    capabilities: ["CAPABILITY_IAM"],
     parameters: [
       {
         parameter_key: 'AppImage',
@@ -89,6 +90,7 @@ task 'update:service' do
   cloudformation_client.update_stack(
     stack_name: @service_name,
     template_body: File.read('infrastructure/service.yaml').to_s,
+    capabilities: ["CAPABILITY_IAM"],
     parameters: [
       {
         parameter_key: 'AppImage',
@@ -119,7 +121,8 @@ task 'create:cluster' do
 
   cloudformation_client.create_stack(
     stack_name: @service_name,
-    template_body: File.read('infrastructure/cluster.yaml').to_s
+    template_body: File.read('infrastructure/cluster.yaml').to_s,
+    capabilities: ["CAPABILITY_IAM"]
   )
 
   cloudformation_client.wait_until(:stack_create_complete,
@@ -135,7 +138,8 @@ task 'update:service' do
 
   cloudformation_client.update_stack(
     stack_name: @service_name,
-    template_body: File.read('infrastructure/service.yaml').to_s
+    template_body: File.read('infrastructure/service.yaml').to_s,
+    capabilities: ["CAPABILITY_IAM"]
   )
 
   cloudformation_client.wait_until(:stack_update_complete,
