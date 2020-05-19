@@ -15,14 +15,14 @@ phases:
       - bundle install
       - nohup /usr/local/bin/dockerd --host=unix:///var/run/docker.sock --host=tcp://0.0.0.0:2375 --storage-driver=overlay&
 
-#  pre_build:
-#    commands:
-#      - echo Linting started on `date`
-#      - |
-#        for cfn_template in $CFN_TEMPLATES; do
-#          echo "Scanning CloudFormation template $cfn_template"
-#          cfn_nag_scan --input-path infrastructure/$cfn_template.yaml --blacklist-path blacklist
-#        done
+  pre_build:
+    commands:
+      - echo Linting started on `date`
+      - |
+        for cfn_template in $CFN_TEMPLATES; do
+          echo "Scanning CloudFormation template $cfn_template"
+          cfn_nag_scan --input-path infrastructure/$cfn_template.yaml --blacklist-path blacklist
+        done
 
   build:
     commands:

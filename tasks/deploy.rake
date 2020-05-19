@@ -93,16 +93,16 @@ task 'update:service' do
     capabilities: ["CAPABILITY_IAM"],
     parameters: [
       {
-        parameter_key: 'AppImage',
+        parameter_key: 'ImageUrl',
         parameter_value: "#{File.read(@ecr_repo_url_path)}/jenkins:#{version}"
       },
       {
-        parameter_key: 'AppPort',
-        parameter_value: '8080'
+        parameter_key: 'StackName',
+        parameter_value: @service_name
       },
       {
-        parameter_key: 'AppCommand',
-        parameter_value: ''
+        parameter_key: 'ServiceName',
+        parameter_value: @service_name
       }
     ]
   )
@@ -132,13 +132,13 @@ task 'create:cluster' do
 end
 
 desc 'Update Jenkins ECS Service'
-task 'update:service' do
+task 'update:cluster' do
   version = File.read(@version_url_path).to_s
   cloudformation_client = Aws::CloudFormation::Client.new
 
   cloudformation_client.update_stack(
     stack_name: @service_name,
-    template_body: File.read('infrastructure/service.yaml').to_s,
+    template_body: File.read('infrastructure/cluster.yaml').to_s,
     capabilities: ["CAPABILITY_IAM"]
   )
 

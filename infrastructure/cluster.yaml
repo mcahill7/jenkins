@@ -1,304 +1,295 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Fargate: cluster, a cloudonaut.io template'
-Metadata:
-    'AWS::CloudFormation::Interface':
-    ParameterGroups:
-    - Label:
-        default: 'Parent Stacks'
-        Parameters:
-        - ParentVPCStack
-        - ParentAuthProxyStack
-        - ParentAlertStack
-        - ParentZoneStack
-        - ParentS3StackAccessLog
-    - Label:
-        default: 'Load Balancer Parameters'
-        Parameters:
-        - LoadBalancerScheme
-        - LoadBalancerCertificateArn
-        - LoadBalancerIdleTimeout
-        - SubDomainNameWithDot
-Parameters:
-    ParentVPCStack:
-    Description: 'Stack name of parent VPC stack based on vpc/vpc-*azs.yaml template.'
-    Type: String
-    ParentAuthProxyStack:
-    Description: 'Optional stack name of parent auth proxy stack based on security/auth-proxy-*.yaml template.'
-    Type: String
-    Default: ''
-    ParentAlertStack:
-    Description: 'Optional but recommended stack name of parent alert stack based on operations/alert.yaml template.'
-    Type: String
-    Default: ''
-    ParentZoneStack:
-    Description: 'Optional stack name of parent zone stack based on vpc/zone-*.yaml template.'
-    Type: String
-    Default: ''
-    ParentS3StackAccessLog:
-    Description: 'Optional stack name of parent s3 stack based on state/s3.yaml template (with Access set to ElbAccessLogWrite) to store access logs.'
-    Type: String
-    Default: ''
-    LoadBalancerScheme:
-    Description: 'Indicates whether the load balancer in front of the ECS service is internet-facing or internal.'
-    Type: String
-    Default: 'internet-facing'
-    AllowedValues:
-    - 'internet-facing'
-    - internal
-    LoadBalancerCertificateArn:
-    Description: 'Optional Amazon Resource Name (ARN) of the certificate to associate with the load balancer. If set, HTTP requests are redirected to HTTPS.'
-    Type: String
-    Default: ''
-    LoadBalancerIdleTimeout:
-    Description: 'The idle timeout value, in seconds.'
-    Type: Number
-    Default: 60
-    MinValue: 1
-    MaxValue: 4000
-    SubDomainNameWithDot:
-    Description: 'Name that is used to create the DNS entry with trailing dot, e.g. §{SubDomainNameWithDot}§{HostedZoneName}. Leave blank for naked (or apex and bare) domain. Requires ParentZoneStack parameter!'
-    Type: String
-    Default: ''
-Conditions:
-    HasAuthProxySecurityGroup: !Not [!Equals [!Ref ParentAuthProxyStack, '']]
-    HasNotAuthProxySecurityGroup: !Equals [!Ref ParentAuthProxyStack, '']
-    HasLoadBalancerSchemeInternetFacing: !Equals [!Ref LoadBalancerScheme, 'internet-facing']
-    HasLoadBalancerSchemeInternal: !Equals [!Ref LoadBalancerScheme, 'internal']
-    HasLoadBalancerCertificateArn: !Not [!Equals [!Ref LoadBalancerCertificateArn, '']]
-    HasAuthProxySecurityGroupAndLoadBalancerCertificateArn: !And [!Condition HasAuthProxySecurityGroup, !Condition HasLoadBalancerCertificateArn]
-    HasNotAuthProxySecurityGroupAndLoadBalancerCertificateArn: !And [!Condition HasNotAuthProxySecurityGroup, !Condition HasLoadBalancerCertificateArn]
-    HasAlertTopic: !Not [!Equals [!Ref ParentAlertStack, '']]
-    HasZone: !Not [!Equals [!Ref ParentZoneStack, '']]
-    HasZoneAndLoadBalancerSchemeInternetFacing: !And [!Condition HasZone, !Condition HasLoadBalancerSchemeInternetFacing]
-    HasS3Bucket: !Not [!Equals [!Ref ParentS3StackAccessLog, '']]
+Description: A stack for deploying containerized applications in AWS Fargate.
+             This stack runs containers in a public VPC subnet, and includes a
+             public facing load balancer to register the services in.
+Mappings:
+  # Hard values for the subnet masks. These masks define
+  # the range of internal IP addresses that can be assigned.
+  # The VPC can have all IP's from 10.0.0.0 to 10.0.255.255
+  # There are two subnets which cover the ranges:
+  #
+  # 10.0.0.0 - 10.0.0.255
+  # 10.0.1.0 - 10.0.1.255
+  #
+  # If you need more IP addresses (perhaps you have so many
+  # instances that you run out) then you can customize these
+  # ranges to add more
+  SubnetConfig:
+    VPC:
+      CIDR: '10.0.0.0/16'
+    PublicOne:
+      CIDR: '10.0.0.0/24'
+    PublicTwo:
+      CIDR: '10.0.1.0/24'
 Resources:
-    Cluster:
-    Type: 'AWS::ECS::Cluster'
-    Properties: {}
-    RecordSet:
-    Condition: HasZone
-    Type: 'AWS::Route53::RecordSet'
+  # VPC in which containers will be networked.
+  # It has two public subnets
+  # We distribute the subnets across the first two available subnets
+  # for the region, for high availability.
+  VPC:
+    Type: AWS::EC2::VPC
     Properties:
-        AliasTarget:
-        HostedZoneId: !GetAtt LoadBalancer.CanonicalHostedZoneID
-        DNSName: !GetAtt 'LoadBalancer.DNSName'
-        HostedZoneId: {'Fn::ImportValue': !Sub '${ParentZoneStack}-HostedZoneId'}
-        Name: !Sub
-        - '${SubDomainNameWithDot}${HostedZoneName}'
-        - SubDomainNameWithDot: !Ref SubDomainNameWithDot
-        HostedZoneName: {'Fn::ImportValue': !Sub '${ParentZoneStack}-HostedZoneName'}
-        Type: A
-    RecordSetIPv6:
-    Condition: HasZoneAndLoadBalancerSchemeInternetFacing
-    Type: 'AWS::Route53::RecordSet'
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      CidrBlock: !FindInMap ['SubnetConfig', 'VPC', 'CIDR']
+
+  # Two public subnets, where containers can have public IP addresses
+  PublicSubnetOne:
+    Type: AWS::EC2::Subnet
     Properties:
-        AliasTarget:
-        HostedZoneId: !GetAtt LoadBalancer.CanonicalHostedZoneID
-        DNSName: !GetAtt 'LoadBalancer.DNSName'
-        HostedZoneId: {'Fn::ImportValue': !Sub '${ParentZoneStack}-HostedZoneId'}
-        Name: !Sub
-        - '${SubDomainNameWithDot}${HostedZoneName}'
-        - SubDomainNameWithDot: !Ref SubDomainNameWithDot
-        HostedZoneName: {'Fn::ImportValue': !Sub '${ParentZoneStack}-HostedZoneName'}
-        Type: AAAA
-    LoadBalancerSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
+      AvailabilityZone:
+         Fn::Select:
+         - 0
+         - Fn::GetAZs: {Ref: 'AWS::Region'}
+      VpcId: !Ref 'VPC'
+      CidrBlock: !FindInMap ['SubnetConfig', 'PublicOne', 'CIDR']
+      MapPublicIpOnLaunch: true
+  PublicSubnetTwo:
+    Type: AWS::EC2::Subnet
     Properties:
-        GroupDescription: !Sub '${AWS::StackName}-load-balancer'
-        VpcId: {'Fn::ImportValue': !Sub '${ParentVPCStack}-VPC'}
-    LoadBalancerSecurityGroupInHttpFromWorld:
-    Type: 'AWS::EC2::SecurityGroupIngress'
-    Condition: HasNotAuthProxySecurityGroup
+      AvailabilityZone:
+         Fn::Select:
+         - 1
+         - Fn::GetAZs: {Ref: 'AWS::Region'}
+      VpcId: !Ref 'VPC'
+      CidrBlock: !FindInMap ['SubnetConfig', 'PublicTwo', 'CIDR']
+      MapPublicIpOnLaunch: true
+
+  # Setup networking resources for the public subnets. Containers
+  # in the public subnets have public IP addresses and the routing table
+  # sends network traffic via the internet gateway.
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  GatewayAttachement:
+    Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-        GroupId: !Ref LoadBalancerSecurityGroup
-        IpProtocol: tcp
-        FromPort: 80
-        ToPort: 80
-        CidrIp: '0.0.0.0/0'
-    LoadBalancerSecurityGroupInHttpFromWorldIPv6:
-    Type: 'AWS::EC2::SecurityGroupIngress'
-    Condition: HasNotAuthProxySecurityGroup
+      VpcId: !Ref 'VPC'
+      InternetGatewayId: !Ref 'InternetGateway'
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
     Properties:
-        GroupId: !Ref LoadBalancerSecurityGroup
-        IpProtocol: tcp
-        FromPort: 80
-        ToPort: 80
-        CidrIpv6: '::/0'
-    LoadBalancerSecurityGroupInHttpsFromWorld:
-    Type: 'AWS::EC2::SecurityGroupIngress'
-    Condition: HasNotAuthProxySecurityGroupAndLoadBalancerCertificateArn
+      VpcId: !Ref 'VPC'
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachement
     Properties:
-        GroupId: !Ref LoadBalancerSecurityGroup
-        IpProtocol: tcp
-        FromPort: 443
-        ToPort: 443
-        CidrIp: '0.0.0.0/0'
-    LoadBalancerSecurityGroupInHttpsFromWorldIPv6:
-    Type: 'AWS::EC2::SecurityGroupIngress'
-    Condition: HasNotAuthProxySecurityGroupAndLoadBalancerCertificateArn
+      RouteTableId: !Ref 'PublicRouteTable'
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref 'InternetGateway'
+  PublicSubnetOneRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-        GroupId: !Ref LoadBalancerSecurityGroup
-        IpProtocol: tcp
-        FromPort: 443
-        ToPort: 443
-        CidrIpv6: '::/0'
-    LoadBalancerSecurityGroupInHttpFromAuthProxy:
-    Type: 'AWS::EC2::SecurityGroupIngress'
-    Condition: HasAuthProxySecurityGroup
+      SubnetId: !Ref PublicSubnetOne
+      RouteTableId: !Ref PublicRouteTable
+  PublicSubnetTwoRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-        GroupId: !Ref LoadBalancerSecurityGroup
-        IpProtocol: tcp
-        FromPort: 80
-        ToPort: 80
-        SourceSecurityGroupId: {'Fn::ImportValue': !Sub '${ParentAuthProxyStack}-SecurityGroup'}
-    LoadBalancerSecurityGroupInHttpsFromAuthProxy:
-    Type: 'AWS::EC2::SecurityGroupIngress'
-    Condition: HasAuthProxySecurityGroupAndLoadBalancerCertificateArn
+      SubnetId: !Ref PublicSubnetTwo
+      RouteTableId: !Ref PublicRouteTable
+
+  # ECS Resources
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+
+  # A security group for the containers we will run in Fargate.
+  # Two rules, allowing network traffic from a public facing load
+  # balancer and from other members of the security group.
+  #
+  # Remove any of the following ingress rules that are not needed.
+  # If you want to make direct requests to a container using its
+  # public IP address you'll need to add a security group rule
+  # to allow traffic from all IP addresses.
+  FargateContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-        GroupId: !Ref LoadBalancerSecurityGroup
-        IpProtocol: tcp
-        FromPort: 443
-        ToPort: 443
-        SourceSecurityGroupId: {'Fn::ImportValue': !Sub '${ParentAuthProxyStack}-SecurityGroup'}
-    LoadBalancer:
-    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+      GroupDescription: Access to the Fargate containers
+      VpcId: !Ref 'VPC'
+  EcsSecurityGroupIngressFromPublicALB:
+    Type: AWS::EC2::SecurityGroupIngress
     Properties:
-        IpAddressType: !If [HasLoadBalancerSchemeInternal, 'ipv4', 'dualstack']
-        LoadBalancerAttributes:
-        - Key: 'idle_timeout.timeout_seconds'
-        Value: !Ref LoadBalancerIdleTimeout
-        - Key: 'routing.http2.enabled'
-        Value: 'true'
-        - Key: 'access_logs.s3.enabled'
-        Value: !If [HasS3Bucket, 'true', 'false']
-        - !If [HasS3Bucket, {Key: 'access_logs.s3.prefix', Value: !Ref 'AWS::StackName'}, !Ref 'AWS::NoValue']
-        - !If [HasS3Bucket, {Key: 'access_logs.s3.bucket', Value: {'Fn::ImportValue': !Sub '${ParentS3StackAccessLog}-BucketName'}}, !Ref 'AWS::NoValue']
-        Scheme: !Ref LoadBalancerScheme
-        SecurityGroups:
-        - !Ref LoadBalancerSecurityGroup
-        Subnets: !If
-        - HasLoadBalancerSchemeInternal
-        - !Split [',', {'Fn::ImportValue': !Sub '${ParentVPCStack}-SubnetsPrivate'}]
-        - !Split [',', {'Fn::ImportValue': !Sub '${ParentVPCStack}-SubnetsPublic'}]
-        Type: application
-    HTTPCodeELB5XXTooHighAlarm:
-    Condition: HasAlertTopic
-    Type: 'AWS::CloudWatch::Alarm'
+      Description: Ingress from the public ALB
+      GroupId: !Ref 'FargateContainerSecurityGroup'
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref 'PublicLoadBalancerSG'
+  EcsSecurityGroupIngressFromSelf:
+    Type: AWS::EC2::SecurityGroupIngress
     Properties:
-        AlarmDescription: 'Application load balancer returns 5XX HTTP status codes'
-        Namespace: 'AWS/ApplicationELB'
-        MetricName: HTTPCode_ELB_5XX_Count
-        Statistic: Sum
-        Period: 60
-        EvaluationPeriods: 1
-        ComparisonOperator: GreaterThanThreshold
-        Threshold: 0
-        AlarmActions:
-        - {'Fn::ImportValue': !Sub '${ParentAlertStack}-TopicARN'}
-        Dimensions:
-        - Name: LoadBalancer
-        Value: !GetAtt 'LoadBalancer.LoadBalancerFullName'
-        TreatMissingData: notBreaching
-    RejectedConnectionCountTooHighAlarm:
-    Condition: HasAlertTopic
-    Type: 'AWS::CloudWatch::Alarm'
+      Description: Ingress from other containers in the same security group
+      GroupId: !Ref 'FargateContainerSecurityGroup'
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref 'FargateContainerSecurityGroup'
+
+  # Load balancers for getting traffic to containers.
+  # This sample template creates one load balancer:
+  #
+  # - One public load balancer, hosted in public subnets that is accessible
+  #   to the public, and is intended to route traffic to one or more public
+  #   facing services.
+
+  # A public facing load balancer, this is used for accepting traffic from the public
+  # internet and directing it to public facing microservices
+  PublicLoadBalancerSG:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-        AlarmDescription: 'Application load balancer rejected connections because the load balancer had reached its maximum number of connections'
-        Namespace: 'AWS/ApplicationELB'
-        MetricName: RejectedConnectionCount
-        Statistic: Sum
-        Period: 60
-        EvaluationPeriods: 1
-        ComparisonOperator: GreaterThanThreshold
-        Threshold: 0
-        AlarmActions:
-        - {'Fn::ImportValue': !Sub '${ParentAlertStack}-TopicARN'}
-        Dimensions:
-        - Name: LoadBalancer
-        Value: !GetAtt 'LoadBalancer.LoadBalancerFullName'
-        TreatMissingData: notBreaching
-    HttpListener:
-    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+      GroupDescription: Access to the public facing load balancer
+      VpcId: !Ref 'VPC'
+      SecurityGroupIngress:
+          # Allow access to ALB from anywhere on the internet
+          - CidrIp: 0.0.0.0/0
+            IpProtocol: -1
+  PublicLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-        DefaultActions:
-        - !If
-        - HasLoadBalancerCertificateArn
-        - RedirectConfig:
-            Port: '443'
-            Protocol: HTTPS
-            StatusCode: 'HTTP_301'
-            Type: redirect
-        - FixedResponseConfig:
-            ContentType: 'text/plain'
-            MessageBody: default
-            StatusCode: '404'
-            Type: 'fixed-response'
-        LoadBalancerArn: !Ref LoadBalancer
-        Port: 80
-        Protocol: HTTP
-    HttpsListener:
-    Condition: HasLoadBalancerCertificateArn
-    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+      - Key: idle_timeout.timeout_seconds
+        Value: '30'
+      Subnets:
+        # The load balancer is placed into the public subnets, so that traffic
+        # from the internet can reach the load balancer directly via the internet gateway
+        - !Ref PublicSubnetOne
+        - !Ref PublicSubnetTwo
+      SecurityGroups: [!Ref 'PublicLoadBalancerSG']
+  # A dummy target group is used to setup the ALB to just drop traffic
+  # initially, before any real service target groups have been added.
+  DummyTargetGroupPublic:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-        Certificates:
-        - CertificateArn: !Ref LoadBalancerCertificateArn
-        DefaultActions:
-        - FixedResponseConfig:
-            ContentType: 'text/plain'
-            MessageBody: default
-            StatusCode: '404'
-        Type: 'fixed-response'
-        LoadBalancerArn: !Ref LoadBalancer
-        Port: 443
-        Protocol: HTTPS
+      HealthCheckIntervalSeconds: 6
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Name: !Join ['-', [!Ref 'AWS::StackName', 'drop-1']]
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: !Ref 'VPC'
+  PublicLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn:
+      - PublicLoadBalancer
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref 'DummyTargetGroupPublic'
+          Type: 'forward'
+      LoadBalancerArn: !Ref 'PublicLoadBalancer'
+      Port: 80
+      Protocol: HTTP
+
+  # This is an IAM role which authorizes ECS to manage resources on your
+  # account on your behalf, such as updating your load balancer with the
+  # details of where your containers are, so that traffic can reach your
+  # containers.
+  ECSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: ecs-service
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              # Rules which allow ECS to attach network interfaces to instances
+              # on your behalf in order for awsvpc networking mode to work right
+              - 'ec2:AttachNetworkInterface'
+              - 'ec2:CreateNetworkInterface'
+              - 'ec2:CreateNetworkInterfacePermission'
+              - 'ec2:DeleteNetworkInterface'
+              - 'ec2:DeleteNetworkInterfacePermission'
+              - 'ec2:Describe*'
+              - 'ec2:DetachNetworkInterface'
+
+              # Rules which allow ECS to update load balancers on your behalf
+              # with the information sabout how to send traffic to your containers
+              - 'elasticloadbalancing:DeregisterInstancesFromLoadBalancer'
+              - 'elasticloadbalancing:DeregisterTargets'
+              - 'elasticloadbalancing:Describe*'
+              - 'elasticloadbalancing:RegisterInstancesWithLoadBalancer'
+              - 'elasticloadbalancing:RegisterTargets'
+            Resource: '*'
+
+  # This is a role which is used by the ECS tasks themselves.
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs-tasks.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: AmazonECSTaskExecutionRolePolicy
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action:
+                # Allow the ECS Tasks to download images from ECR
+                - 'ecr:GetAuthorizationToken'
+                - 'ecr:BatchCheckLayerAvailability'
+                - 'ecr:GetDownloadUrlForLayer'
+                - 'ecr:BatchGetImage'
+
+                # Allow the ECS tasks to upload logs to CloudWatch
+                - 'logs:CreateLogStream'
+                - 'logs:PutLogEvents'
+              Resource: '*'
+
+# These are the values output by the CloudFormation template. Be careful
+# about changing any of them, because of them are exported with specific
+# names so that the other task related CF templates can use them.
 Outputs:
-    TemplateID:
-    Description: 'cloudonaut.io template id.'
-    Value: 'fargate/cluster'
-    TemplateVersion:
-    Description: 'cloudonaut.io template version.'
-    Value: '__VERSION__'
-    StackName:
-    Description: 'Stack name.'
-    Value: !Sub '${AWS::StackName}'
-    Cluster:
-    Description: 'Fargate cluster.'
-    Value: !Ref Cluster
+  ClusterName:
+    Description: The name of the ECS cluster
+    Value: !Ref 'ECSCluster'
     Export:
-        Name: !Sub '${AWS::StackName}-Cluster'
-    DNSName:
-    Description: 'The DNS name for the ECS cluster load balancer.'
-    Value: !GetAtt 'LoadBalancer.DNSName'
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'ClusterName' ] ]
+  ExternalUrl:
+    Description: The url of the external load balancer
+    Value: !Join ['', ['http://', !GetAtt 'PublicLoadBalancer.DNSName']]
     Export:
-        Name: !Sub '${AWS::StackName}-DNSName'
-    URL:
-    Description: 'URL to the ECS cluster.'
-    Value: !Sub 'http://${LoadBalancer.DNSName}'
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'ExternalUrl' ] ]
+  ECSRole:
+    Description: The ARN of the ECS role
+    Value: !GetAtt 'ECSRole.Arn'
     Export:
-        Name: !Sub '${AWS::StackName}-URL'
-    CanonicalHostedZoneID:
-    Description: 'The ID of the Amazon Route 53 hosted zone associated with the load balancer.'
-    Value: !GetAtt LoadBalancer.CanonicalHostedZoneID
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'ECSRole' ] ]
+  ECSTaskExecutionRole:
+    Description: The ARN of the ECS role
+    Value: !GetAtt 'ECSTaskExecutionRole.Arn'
     Export:
-        Name: !Sub '${AWS::StackName}-CanonicalHostedZoneID'
-    LoadBalancerFullName:
-    Description: 'ALB full name for services.'
-    Value: !GetAtt 'LoadBalancer.LoadBalancerFullName'
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'ECSTaskExecutionRole' ] ]
+  PublicListener:
+    Description: The ARN of the public load balancer's Listener
+    Value: !Ref PublicLoadBalancerListener
     Export:
-        Name: !Sub '${AWS::StackName}-LoadBalancerFullName'
-    LoadBalancerSecurityGroup:
-    Description: 'The Security Group of the Load Balancer.'
-    Value: !Ref LoadBalancerSecurityGroup
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'PublicListener' ] ]
+  VPCId:
+    Description: The ID of the VPC that this stack is deployed in
+    Value: !Ref 'VPC'
     Export:
-        Name: !Sub '${AWS::StackName}-LoadBalancerSecurityGroup'
-    HttpListener:
-    Description: 'ALB HTTP listener for services.'
-    Value: !Ref HttpListener
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'VPCId' ] ]
+  PublicSubnetOne:
+    Description: Public subnet one
+    Value: !Ref 'PublicSubnetOne'
     Export:
-        Name: !Sub '${AWS::StackName}-HttpListener'
-    HttpsListener:
-    Condition: HasLoadBalancerCertificateArn
-    Description: 'ALB HTTPS listener for services.'
-    Value: !Ref HttpsListener
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'PublicSubnetOne' ] ]
+  PublicSubnetTwo:
+    Description: Public subnet two
+    Value: !Ref 'PublicSubnetTwo'
     Export:
-        Name: !Sub '${AWS::StackName}-HttpsListener'
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'PublicSubnetTwo' ] ]
+  FargateContainerSecurityGroup:
+    Description: A security group used to allow Fargate containers to receive traffic
+    Value: !Ref 'FargateContainerSecurityGroup'
+    Export:
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'FargateContainerSecurityGroup' ] ]
