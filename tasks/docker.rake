@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'docker'
+require 'docker-api'
 require 'aws-sdk'
 require_relative 'constants'
 
