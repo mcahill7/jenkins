@@ -62,16 +62,16 @@ task 'create:service' do
     capabilities: ["CAPABILITY_IAM"],
     parameters: [
       {
-        parameter_key: 'AppImage',
+        parameter_key: 'ImageUrl',
         parameter_value: "#{File.read(@ecr_repo_url_path)}/jenkins:#{version}"
       },
       {
-        parameter_key: 'AppPort',
-        parameter_value: '8080'
+        parameter_key: 'StackName',
+        parameter_value: @service_name
       },
       {
-        parameter_key: 'AppCommand',
-        parameter_value: ''
+        parameter_key: 'ServiceName',
+        parameter_value: @service_name
       }
     ]
   )
