@@ -42,7 +42,7 @@ task 'deploy:cluster' do
   cloudformation_client = Aws::CloudFormation::Client.new
   begin
     cloudformation_client.describe_stacks({
-                                            stack_name: @service_name
+                                            stack_name: @cluster_name
                                           })
     Rake::Task['update:cluster'].invoke
   rescue
@@ -120,30 +120,30 @@ task 'create:cluster' do
   cloudformation_client = Aws::CloudFormation::Client.new
 
   cloudformation_client.create_stack(
-    stack_name: @service_name,
+    stack_name: @cluster_name,
     template_body: File.read('infrastructure/cluster.yaml').to_s,
     capabilities: ["CAPABILITY_IAM"]
   )
 
   cloudformation_client.wait_until(:stack_create_complete,
-                                   stack_name: @service_name)
+                                   stack_name: @cluster_name)
 
-  puts "Cloudformation Stack: #{@service_name} created."
+  puts "Cloudformation Stack: #{@cluster_name} created."
 end
 
-desc 'Update Jenkins ECS Service'
+desc 'Update Jenkins ECS Cluster'
 task 'update:cluster' do
   version = File.read(@version_url_path).to_s
   cloudformation_client = Aws::CloudFormation::Client.new
 
   cloudformation_client.update_stack(
-    stack_name: @service_name,
+    stack_name: @cluster_name,
     template_body: File.read('infrastructure/cluster.yaml').to_s,
     capabilities: ["CAPABILITY_IAM"]
   )
 
   cloudformation_client.wait_until(:stack_update_complete,
-                                   stack_name: @service_name)
+                                   stack_name: @cluster_name)
 
-  puts "Cloudformation Stack: #{@service_name} updated."
+  puts "Cloudformation Stack: #{@cluster_name} updated."
 end
