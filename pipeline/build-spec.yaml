@@ -14,7 +14,7 @@ phases:
       - echo 'Build' action Install phase - install testing dependencies
       - gem install bundler cfn-nag docker-api rake rspec aws-sdk serverspec
       - bundle install
-      - timeout 15 sh -c "until docker info; do echo .; sleep 1; done" 
+      - nohup /usr/local/bin/dockerd --host=unix:///var/run/docker.sock --host=tcp://0.0.0.0:2375 --storage-driver=overlay&
 
 #  pre_build:
 #    commands:
