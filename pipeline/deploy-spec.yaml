@@ -4,6 +4,9 @@ phases:
   install:
     runtime-versions:
       ruby: 2.6
+    commands:
+      - echo 'Build' action Install phase - install testing dependencies
+      - gem install rake serverspec rspec awspec
 
   build:
     commands:
