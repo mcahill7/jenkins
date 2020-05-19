@@ -12,10 +12,10 @@ Parameters:
     Default: master
   GitHubToken:
     Type: String
-    Default:  a58322700b44d53f7147970f32fd9f5a30b673e0
+    Default:  7b747eaff75e4b2334ed92bd6e62c16003eea2ad
   BuildAgentImage:
     Type: String
-    Default: aws/codebuild/standard:2.0
+    Default: aws/codebuild/standard:4.0
   BuildCheckTimeoutInMinutes:
     Type: Number
     Default: 5
@@ -318,6 +318,8 @@ Resources:
                   - ec2:*
                   - elasticloadbalancing:*
                   - autoscaling:*
+                  - ecr:*
+                  - ecs:*
                 Resource:
                   - '*'
   ActionBuild:
@@ -330,9 +332,13 @@ Resources:
         Type: CODEPIPELINE
       Description: 'CodeBuild Project'
       Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
+        ComputeType: BUILD_GENERAL1_MEDIUM
         Image: !Ref BuildAgentImage
         Type: LINUX_CONTAINER
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref "AWS::AccountId"
       Name: !Sub '${RepositoryName}-build'
       ServiceRole: !Ref ActionServiceRole
       Source:
@@ -352,11 +358,20 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: !Ref BuildAgentImage
         Type: LINUX_CONTAINER
+        PrivilegedMode: true
         EnvironmentVariables:
           - Name: BUCKET_NAME
             Value: !Ref PipelineArtifactStore
           - Name: REPO_NAME
             Value: !Ref RepositoryName
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref 'AWS::AccountId'
+          - Name: LANG
+            Value: en_US.UTF-8
+          - Name: LC_ALL
+            Value: en_US.UTF-8
+            - Name: LC_CTYPE
+            Value: en_US.UTF-8
       Name: !Sub '${RepositoryName}-create'
       ServiceRole: !Ref ActionServiceRole
       Source:

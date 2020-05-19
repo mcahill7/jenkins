@@ -1,6 +1,12 @@
 version: 0.2
 
 phases:
+  pre_build:
+    commands:
+      - export LC_ALL="en_US.UTF-8"
+      - locale-gen en_US en_US.UTF-8
+      - dpkg-reconfigure locales
+
   install:
     runtime-versions:
       ruby: 2.6
