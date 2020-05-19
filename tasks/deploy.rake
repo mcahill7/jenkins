@@ -46,7 +46,7 @@ task 'deploy:cluster' do
                                           })
     Rake::Task['update:cluster'].invoke
   rescue
-    Rake::Task['create:service'].invoke
+    Rake::Task['create:cluster'].invoke
   else
   end
 end
