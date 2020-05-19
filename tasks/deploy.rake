@@ -31,7 +31,7 @@ task 'deploy:service' do
                                             stack_name: @service_name
                                           })
     Rake::Task['update:service'].invoke
-  rescue StandardError => e
+  rescue
     Rake::Task['create:service'].invoke
   else
   end
@@ -41,11 +41,11 @@ desc 'Deploy Jenkins Service'
 task 'deploy:cluster' do
   cloudformation_client = Aws::CloudFormation::Client.new
   begin
-    cloudformation_client.describe_stacks({
+    cloudformation_client.describe_ stacks({
                                             stack_name: @service_name
                                           })
     Rake::Task['update:cluster'].invoke
-  rescue StandardError => e
+  rescue
     Rake::Task['create:service'].invoke
   else
   end
