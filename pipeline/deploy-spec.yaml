@@ -6,7 +6,8 @@ phases:
       ruby: 2.6
     commands:
       - echo 'Build' action Install phase - install testing dependencies
-      - gem install rake serverspec rspec awspec
+      - gem install bundler
+      - bundle install
 
   build:
     commands:

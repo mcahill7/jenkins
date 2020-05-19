@@ -11,7 +11,8 @@ phases:
       ruby: 2.6
     commands:
       - echo 'Build' action Install phase - install testing dependencies
-      - gem install cfn-nag docker-api rake aws-sdk
+      - gem install bundler cfn-nag
+      - bundle install
       - nohup /usr/local/bin/dockerd --host=unix:///var/run/docker.sock --host=tcp://0.0.0.0:2375 --storage-driver=overlay&
 
 #  pre_build:
