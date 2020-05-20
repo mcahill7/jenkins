@@ -2,6 +2,6 @@
 
 require_relative '../spec_helper'
 
-describe ecs_cluster('jenkins-cluster') do
+describe ecs_cluster('jenkins-cluster-ECSCluster-oGlvtt5TDJK2') do
   it { should exist }
 end

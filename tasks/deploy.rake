@@ -23,15 +23,6 @@ task 'jenkins:e2e' do
   end
 end
 
-desc 'Deploy'
-task 'deploy:all' do
-  cloudformation_client = Aws::CloudFormation::Client.new
-  begin
-
-  rescue
-  else
-  end
-end
 
 desc 'Deploy Jenkins Service'
 task 'deploy:service' do
@@ -40,10 +31,13 @@ task 'deploy:service' do
     cloudformation_client.describe_stacks({
                                             stack_name: @service_name
                                           })
-    Rake::Task['update:service'].invoke
+    begin
+      Rake::Task['update:service'].invoke
+    rescue
+      puts "No Updates"
+    end
   rescue
     Rake::Task['create:service'].invoke
-  else
   end
 end
 
@@ -54,10 +48,13 @@ task 'deploy:cluster' do
     cloudformation_client.describe_stacks({
                                             stack_name: @cluster_name
                                           })
-    Rake::Task['update:cluster'].invoke
+    begin
+      Rake::Task['update:cluster'].invoke
+    rescue
+      puts "No Updates"
+    end
   rescue
     Rake::Task['create:cluster'].invoke
-  else
   end
 end
 
