@@ -2,6 +2,13 @@
 
 require_relative '../spec_helper'
 
-describe ecs_cluster('jenkins-cluster-ECSCluster-oGlvtt5TDJK2') do
+describe ecs_cluster('jenkins-cluster') do
   it { should exist }
+end
+
+describe alb('jenki-Publi-1VHMS7IEAMQ5O') do
+  it { should exist }
+  its(:scheme) { should eq 'internet-facing' }
+  its(:type) { should eq 'application' }
+  its(:ip_address_type) { should eq 'ipv4' }
 end

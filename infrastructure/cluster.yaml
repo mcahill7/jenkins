@@ -90,6 +90,8 @@ Resources:
   # ECS Resources
   ECSCluster:
     Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Ref AWS::StackName
 
   # A security group for the containers we will run in Fargate.
   # Two rules, allowing network traffic from a public facing load
@@ -140,6 +142,7 @@ Resources:
   PublicLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
+      Name: !Ref 'AWS::StackName'
       Scheme: internet-facing
       LoadBalancerAttributes:
       - Key: idle_timeout.timeout_seconds
