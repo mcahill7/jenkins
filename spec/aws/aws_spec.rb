@@ -6,7 +6,7 @@ describe ecs_cluster('jenkins-cluster') do
   it { should exist }
 end
 
-describe alb('jenki-Publi-1VHMS7IEAMQ5O') do
+describe alb('jenkins-alb') do
   it { should exist }
   its(:scheme) { should eq 'internet-facing' }
   its(:type) { should eq 'application' }
