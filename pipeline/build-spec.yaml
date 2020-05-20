@@ -12,7 +12,7 @@ phases:
       ruby: 2.6
     commands:
       - echo 'Build' action Install phase - install testing dependencies
-      - gem install bundler cfn-nag
+      - gem install bundler cfn-nag rubocop
       - bundle install
       - nohup /usr/local/bin/dockerd --host=unix:///var/run/docker.sock --host=tcp://0.0.0.0:2375 --storage-driver=overlay&
 
@@ -24,6 +24,8 @@ phases:
           echo "Scanning CloudFormation template $cfn_template"
           cfn_nag_scan --input-path infrastructure/$cfn_template.yaml --blacklist-path blacklist
         done
+      - echo Running rubocop
+      - rubocop
 
   build:
     commands:

@@ -8,7 +8,7 @@ describe 'Dockerfile' do
     image = Docker::Image.build_from_dir('.')
     set :os, family: :debian
     set :backend, :docker
-    set :docker_image, image
+    set :docker_image, image.id
   end
 
   [
@@ -22,10 +22,6 @@ describe 'Dockerfile' do
 
   describe user('jenkins') do
     it { should exist }
-    # it { should belong_to_group 'nobody' }
-  end
-
-  describe port(8080) do
-    it { should be_listening }
+    it { should belong_to_group 'jenkins' }
   end
 end

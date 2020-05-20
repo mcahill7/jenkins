@@ -7,7 +7,7 @@ require_relative 'constants'
 desc 'Build Docker Image'
 task 'docker:build' do
   image = Docker::Image.build_from_dir('.', 't' => 'jenkins:latest')
-  #sh = `docker build -t jenkins:latest .`
+  # sh = `docker build -t jenkins:latest .`
 
   File.write(@image_id_path, image.id)
 

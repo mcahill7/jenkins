@@ -3,27 +3,6 @@
 require 'aws-sdk'
 require_relative 'constants'
 
-desc 'Build and Deploy Jenkins'
-task 'jenkins:e2e' do
-  if ENV['AWS_ACCOUNT_ID'].nil?
-    raise 'Set environment variable AWS_ACCOUNT_ID and try again.'
-  end
-
-  %w[
-    ecr:create
-    docker:build
-    jenkins:test
-    docker:tag
-    docker:push
-    service:create
-    infra:test
-  ].each do |task_name|
-    Rake::Task[task_name].reenable
-    Rake::Task[task_name].invoke
-  end
-end
-
-
 desc 'Deploy Jenkins Service'
 task 'deploy:service' do
   cloudformation_client = Aws::CloudFormation::Client.new
@@ -33,10 +12,10 @@ task 'deploy:service' do
                                           })
     begin
       Rake::Task['update:service'].invoke
-    rescue
-      puts "No Updates"
+    rescue StandardError
+      puts 'No Updates'
     end
-  rescue
+  rescue StandardError
     Rake::Task['create:service'].invoke
   end
 end
@@ -50,10 +29,10 @@ task 'deploy:cluster' do
                                           })
     begin
       Rake::Task['update:cluster'].invoke
-    rescue
-      puts "No Updates"
+    rescue StandardError
+      puts 'No Updates'
     end
-  rescue
+  rescue StandardError
     Rake::Task['create:cluster'].invoke
   end
 end
@@ -66,7 +45,7 @@ task 'create:service' do
   cloudformation_client.create_stack(
     stack_name: @service_name,
     template_body: File.read('infrastructure/service.yaml').to_s,
-    capabilities: ["CAPABILITY_IAM"],
+    capabilities: ['CAPABILITY_IAM'],
     parameters: [
       {
         parameter_key: 'ImageUrl',
@@ -97,7 +76,7 @@ task 'update:service' do
   cloudformation_client.update_stack(
     stack_name: @service_name,
     template_body: File.read('infrastructure/service.yaml').to_s,
-    capabilities: ["CAPABILITY_IAM"],
+    capabilities: ['CAPABILITY_IAM'],
     parameters: [
       {
         parameter_key: 'ImageUrl',
@@ -120,16 +99,14 @@ task 'update:service' do
   puts "Cloudformation Stack: #{@service_name} updated."
 end
 
-
 desc 'Create Jenkins Infra'
 task 'create:cluster' do
-  version = File.read(@version_url_path).to_s
   cloudformation_client = Aws::CloudFormation::Client.new
 
   cloudformation_client.create_stack(
     stack_name: @cluster_name,
     template_body: File.read('infrastructure/cluster.yaml').to_s,
-    capabilities: ["CAPABILITY_IAM"]
+    capabilities: ['CAPABILITY_IAM']
   )
 
   cloudformation_client.wait_until(:stack_create_complete,
@@ -140,13 +117,12 @@ end
 
 desc 'Update Jenkins ECS Cluster'
 task 'update:cluster' do
-  version = File.read(@version_url_path).to_s
   cloudformation_client = Aws::CloudFormation::Client.new
 
   cloudformation_client.update_stack(
     stack_name: @cluster_name,
     template_body: File.read('infrastructure/cluster.yaml').to_s,
-    capabilities: ["CAPABILITY_IAM"]
+    capabilities: ['CAPABILITY_IAM']
   )
 
   cloudformation_client.wait_until(:stack_update_complete,
