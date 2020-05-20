@@ -28,8 +28,7 @@ phases:
   build:
     commands:
       - rake docker:build
-      - rake docker:tag
-      - rake docker:push
+      - rake ci:test
 
   post_build:
     commands:
