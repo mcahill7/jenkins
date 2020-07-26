@@ -12,7 +12,7 @@ Parameters:
     Default: master
   GitHubToken:
     Type: String
-    Default:  7b747eaff75e4b2334ed92bd6e62c16003eea2ad
+    Default:  950bfee1fb52020706cd4986f78557bf273d765b
   BuildAgentImage:
     Type: String
     Default: aws/codebuild/standard:4.0
@@ -370,7 +370,7 @@ Resources:
             Value: en_US.UTF-8
           - Name: LC_ALL
             Value: en_US.UTF-8
-            - Name: LC_CTYPE
+          - Name: LC_CTYPE
             Value: en_US.UTF-8
       Name: !Sub '${RepositoryName}-create'
       ServiceRole: !Ref ActionServiceRole
