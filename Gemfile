@@ -2,8 +2,8 @@
 
 source 'https://rubygems.org'
 
-gem 'aws-sdk', '~> 3'
 gem 'awspec'
+gem 'aws-sdk', '~> 3'
 gem 'docker-api'
 gem 'rake'
 gem 'rspec'
