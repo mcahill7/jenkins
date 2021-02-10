@@ -86,7 +86,7 @@ task 'ecr:create' do
 
   cloudformation_client.create_stack(
     stack_name: @ecr_name,
-    template_body: File.read('infrastructure/ecr.yml').to_s
+    template_body: File.read('infrastructure/ecr.yaml').to_s
   )
 
   cloudformation_client.wait_until(:stack_create_complete,
